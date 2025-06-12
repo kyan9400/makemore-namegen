@@ -1,31 +1,40 @@
 import torch
 import torch.nn.functional as F
+import gradio as gr
 from model import MLP
 from vocab import build_vocab
-import gradio as gr
-
-# Load dataset and build vocab
-with open('names.txt', 'r') as f:
-    words = f.read().splitlines()
 
 context_size = 3
-stoi, itos = build_vocab(words)
-vocab_size = len(stoi)
 
-# Load trained model
-model = MLP(vocab_size, context_size)
-model.load_state_dict(torch.load("namegen_model.pt"))
-model.eval()
+# === File mapping: dataset → correct trained model ===
+model_file_map = {
+    "names.txt": "model_names.pt",
+    "pokemon.txt": "model_pokemon.pt",
+    "fantasy.txt": "model_fantasy.pt",
+}
 
-def generate_name(n=5, temp=1.0):
+# === Core generation logic ===
+def generate_name(n, temp, dataset):
+    # Load dataset
+    with open(dataset, 'r') as f:
+        words = f.read().splitlines()
+
+    # Rebuild vocab + model
+    stoi, itos = build_vocab(words)
+    vocab_size = len(stoi)
+
+    model = MLP(vocab_size, context_size)
+    model.load_state_dict(torch.load(model_file_map[dataset]))
+    model.eval()
+
+    # Generate names
     names = []
     for _ in range(n):
         context = [0] * context_size
         name = ''
         while True:
             x = torch.tensor([context])
-            logits = model(x)
-            logits = logits / temp
+            logits = model(x) / temp
             probs = F.softmax(logits, dim=1)
             ix = torch.multinomial(probs, num_samples=1).item()
             if ix == 0:
@@ -35,18 +44,18 @@ def generate_name(n=5, temp=1.0):
         names.append(name)
     return "\n".join(names)
 
-# Create Gradio UI
+# === Gradio UI ===
 demo = gr.Interface(
     fn=generate_name,
     inputs=[
-        gr.Slider(1, 50, step=1, label="Number of Names"),
-        gr.Slider(0.5, 2.0, step=0.1, value=1.0, label="Temperature"),
+        gr.Slider(1, 50, value=10, step=1, label="Number of Names"),
+        gr.Slider(0.5, 2.0, value=1.0, step=0.1, label="Temperature"),
+        gr.Dropdown(choices=["names.txt", "pokemon.txt", "fantasy.txt"], value="names.txt", label="Dataset")
     ],
     outputs="text",
     title="🧠 Name Generator",
-    description="Generate character-level names using a trained neural network model."
+    description="Generate character-level names using a trained neural network model. Choose your dataset and temperature."
 )
 
 if __name__ == "__main__":
-    demo.launch(share=True)
-
+    demo.launch()
