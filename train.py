@@ -1,10 +1,16 @@
+import argparse
 import torch
 import torch.nn.functional as F
 from model import MLP
 from vocab import build_vocab
 
+# === CLI argument for dataset file ===
+parser = argparse.ArgumentParser(description="Train a name generator model.")
+parser.add_argument('--file', type=str, default='names.txt', help='Path to the dataset file')
+args = parser.parse_args()
+
 # === Load dataset ===
-with open('names.txt', 'r') as f:
+with open(args.file, 'r') as f:
     words = f.read().splitlines()
 
 print("Dataset size:", len(words))

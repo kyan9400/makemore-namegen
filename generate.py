@@ -4,14 +4,15 @@ import torch.nn.functional as F
 from model import MLP
 from vocab import build_vocab
 
-# === Parse CLI arguments ===
+# === CLI Arguments ===
 parser = argparse.ArgumentParser(description="Generate names from a trained model.")
-parser.add_argument("--n", type=int, default=10, help="Number of names to generate")
-parser.add_argument("--temp", type=float, default=1.0, help="Sampling temperature (0.8 = safe, 1.2 = creative)")
+parser.add_argument('--file', type=str, default='names.txt', help='Path to dataset file')
+parser.add_argument('--n', type=int, default=10, help='Number of names to generate')
+parser.add_argument('--temp', type=float, default=1.0, help='Sampling temperature (0.8 = stable, 1.2 = creative)')
 args = parser.parse_args()
 
-# === Load dataset just to rebuild vocab ===
-with open('names.txt', 'r') as f:
+# === Load dataset to rebuild vocab ===
+with open(args.file, 'r') as f:
     words = f.read().splitlines()
 
 stoi, itos = build_vocab(words)
@@ -22,10 +23,10 @@ context_size = 3
 model = MLP(vocab_size, context_size)
 model.load_state_dict(torch.load('namegen_model.pt'))
 model.eval()
-print("✅ Model loaded")
+print(f"✅ Model loaded. Generating from: {args.file}")
 
 # === Generate names ===
-print(f"\n🔁 Generating {args.n} names (temperature={args.temp}):\n")
+print(f"\n🔁 Generating {args.n} names (temperature = {args.temp}):\n")
 
 for _ in range(args.n):
     context = [0] * context_size
