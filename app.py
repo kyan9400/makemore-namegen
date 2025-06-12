@@ -6,23 +6,22 @@ from vocab import build_vocab
 
 context_size = 3
 
-# === File mapping: dataset → correct trained model ===
+# === File mapping: dataset → trained model checkpoint ===
 model_file_map = {
     "names.txt": "model_names.pt",
     "pokemon.txt": "model_pokemon.pt",
     "fantasy.txt": "model_fantasy.pt",
 }
 
-# === Core generation logic ===
 def generate_name(n, temp, dataset):
-    # Load dataset
+    # Load dataset and build vocab
     with open(dataset, 'r') as f:
         words = f.read().splitlines()
 
-    # Rebuild vocab + model
     stoi, itos = build_vocab(words)
     vocab_size = len(stoi)
 
+    # Load correct model
     model = MLP(vocab_size, context_size)
     model.load_state_dict(torch.load(model_file_map[dataset]))
     model.eval()
@@ -45,17 +44,19 @@ def generate_name(n, temp, dataset):
     return "\n".join(names)
 
 # === Gradio UI ===
-demo = gr.Interface(
-    fn=generate_name,
-    inputs=[
-        gr.Slider(1, 50, value=10, step=1, label="Number of Names"),
-        gr.Slider(0.5, 2.0, value=1.0, step=0.1, label="Temperature"),
-        gr.Dropdown(choices=["names.txt", "pokemon.txt", "fantasy.txt"], value="names.txt", label="Dataset")
-    ],
-    outputs="text",
-    title="🧠 Name Generator",
-    description="Generate character-level names using a trained neural network model. Choose your dataset and temperature."
-)
+with gr.Blocks(title="🧠 Name Generator", theme="default") as demo:
+    gr.Markdown("# 🧠 Neural Name Generator")
+    gr.Markdown("Generate creative names from trained models based on your selected dataset.")
+
+    with gr.Row():
+        dataset = gr.Dropdown(choices=["names.txt", "pokemon.txt", "fantasy.txt"], value="names.txt", label="Dataset")
+        count = gr.Slider(1, 50, value=10, step=1, label="Number of Names")
+        temp = gr.Slider(0.5, 2.0, value=1.0, step=0.1, label="Creativity (Temperature)")
+
+    output = gr.Textbox(label="Generated Names", lines=10)
+
+    generate_btn = gr.Button("✨ Generate Names")
+    generate_btn.click(fn=generate_name, inputs=[count, temp, dataset], outputs=output)
 
 if __name__ == "__main__":
     demo.launch()
