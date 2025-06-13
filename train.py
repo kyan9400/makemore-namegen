@@ -1,25 +1,27 @@
 import torch
 import torch.nn.functional as F
-from torch.utils.data import DataLoader, TensorDataset
-
+import json
 from model import MLP
 from vocab import build_vocab
+import sys
 
-# === Load dataset ===
-with open('names.txt', 'r') as f:
+context_size = 3
+dataset_file = "names.txt"
+if len(sys.argv) > 1:
+    dataset_file = sys.argv[1]
+
+# Load data
+with open(dataset_file, 'r') as f:
     words = f.read().splitlines()
-
 print("Dataset size:", len(words))
 
-# === Build vocab ===
+# Vocab
 stoi, itos = build_vocab(words)
 vocab_size = len(stoi)
 print("Vocab size:", vocab_size)
 
-# === Create training data ===
-context_size = 3
+# Prepare data
 X, Y = [], []
-
 for w in words:
     context = [0] * context_size
     for ch in w + '.':
@@ -27,49 +29,32 @@ for w in words:
         X.append(context[:])
         Y.append(ix)
         context = context[1:] + [ix]
-
 X = torch.tensor(X)
 Y = torch.tensor(Y)
 
-# === Wrap in DataLoader ===
-dataset = TensorDataset(X, Y)
-dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
-
-# === Model setup ===
+# Model
 model = MLP(vocab_size, context_size)
 optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
-# === Train ===
+# Log for loss plotting
+loss_log = []
+
 for epoch in range(1000):
-    total_loss = 0.0
-    for xb, yb in dataloader:
-        logits = model(xb)
-        loss = F.cross_entropy(logits, yb)
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-        total_loss += loss.item()
+    logits = model(X)
+    loss = F.cross_entropy(logits, Y)
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
 
-    if epoch % 100 == 0:
-        print(f"Epoch {epoch}, Loss: {total_loss:.4f}")
+    if epoch % 10 == 0:
+        print(f"Epoch {epoch}, Loss: {loss.item():.4f}")
+        loss_log.append({"epoch": epoch, "loss": loss.item()})
 
-# === Generate sample names ===
-print("\nGenerated names:")
-temperature = 1.0
-for _ in range(10):
-    context = [0] * context_size
-    name = ''
-    while True:
-        x = torch.tensor([context])
-        logits = model(x) / temperature
-        probs = F.softmax(logits, dim=1)
-        ix = torch.multinomial(probs, num_samples=1).item()
-        if ix == 0:
-            break
-        name += itos[ix]
-        context = context[1:] + [ix]
-    print(name)
-
-# === Save model ===
-torch.save(model.state_dict(), 'namegen_model.pt')
+# Save model
+torch.save(model.state_dict(), "namegen_model.pt")
 print("✅ Model saved to namegen_model.pt")
+
+# Save loss log
+with open("loss_log.json", "w") as f:
+    json.dump(loss_log, f, indent=2)
+print("✅ Loss log saved to loss_log.json")
