@@ -18,15 +18,28 @@ model_file_map = {
 }
 
 # === Core generation logic ===
-def generate_name(n, temp, topk, dataset):
-    print(f"→ Generating {n} names from {dataset} at temperature {temp}, top-k={topk}")
+def generate_name(n, temp, topk, dataset, prefix, tag_filter):
+    print(f"→ Generating {n} names from {dataset} at temperature {temp}, top-k={topk}, prefix={prefix}, tag={tag_filter}")
     try:
-        with open(dataset, 'r') as f:
-            words = f.read().splitlines()
+        with open(dataset, 'r', encoding='utf-8') as f:
+            lines = f.read().splitlines()
     except FileNotFoundError:
         return f"[Error] Dataset '{dataset}' not found."
 
-    stoi, itos = build_vocab(words)
+    # Split into names and tags
+    names_raw = []
+    tags = []
+    for line in lines:
+        if '|' in line:
+            name, tag = line.split('|')
+            names_raw.append(name.strip())
+            tags.append(tag.strip())
+        else:
+            names_raw.append(line.strip())
+            tags.append("default")
+
+    # Build vocab from raw names only
+    stoi, itos = build_vocab(names_raw)
     vocab_size = len(stoi)
 
     model_path = model_file_map.get(dataset)
@@ -40,11 +53,18 @@ def generate_name(n, temp, topk, dataset):
         return f"[Model Load Error] {e}"
 
     model.eval()
-    names = []
+    results = []
 
-    for _ in range(n):
+    for _ in range(n * 2):  # Over-generate to account for filtering
         context = [0] * context_size
         name = ''
+
+        # Inject prefix
+        for ch in prefix:
+            ix = stoi.get(ch.lower(), 0)
+            name += ch
+            context = context[1:] + [ix]
+
         while True:
             x = torch.tensor([context])
             logits = model(x) / temp
@@ -61,9 +81,19 @@ def generate_name(n, temp, topk, dataset):
                 break
             name += itos[ix]
             context = context[1:] + [ix]
-        names.append(name)
 
-    return "\n".join(names)
+        results.append(name)
+
+        # Stop if enough valid results
+        if len(results) >= n:
+            break
+
+    # Filter if tag is selected
+    if tag_filter and tag_filter != "All":
+        results = [r for r, t in zip(results, tags) if t == tag_filter]
+        results = results[:n]
+
+    return "\n".join(results)
 
 # === Theme toggling ===
 def delayed_restart(new_theme):
@@ -94,12 +124,31 @@ with gr.Blocks(theme=selected_theme) as demo:
             label="Dataset"
         )
 
+    with gr.Row():
+        prefix_input = gr.Textbox(label="Start With (Prefix)", placeholder="Enter 1–2 starting letters...")
+        tag_dropdown = gr.Dropdown(label="Tag Filter", choices=["All", "elven", "orcish", "scientific"], value="All")
+
     output = gr.Textbox(label="Generated Names", lines=10)
     generate_btn = gr.Button("🔁 Generate")
+    copy_btn = gr.Button("📋 Copy to Clipboard")
+
     generate_btn.click(
         fn=generate_name,
-        inputs=[n_slider, temp_slider, topk_slider, dataset_dropdown],
+        inputs=[n_slider, temp_slider, topk_slider, dataset_dropdown, prefix_input, tag_dropdown],
         outputs=output
+    )
+
+    prefix_input.change(
+        fn=generate_name,
+        inputs=[n_slider, temp_slider, topk_slider, dataset_dropdown, prefix_input, tag_dropdown],
+        outputs=output
+    )
+
+    copy_btn.click(
+        fn=lambda txt: txt,
+        inputs=output,
+        outputs=None,
+        js="navigator.clipboard.writeText(arguments[0]); alert('Copied!');"
     )
 
     gr.Markdown("---")
