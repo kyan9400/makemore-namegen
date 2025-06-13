@@ -17,6 +17,20 @@ model_file_map = {
     "fantasy.txt": "model_fantasy.pt",
 }
 
+# === Extract tags from dataset ===
+def get_tags_for_dataset(dataset):
+    try:
+        with open(dataset, 'r', encoding='utf-8') as f:
+            lines = f.read().splitlines()
+    except FileNotFoundError:
+        return ["All"]
+    tags = set()
+    for line in lines:
+        if '|' in line:
+            _, tag = line.split('|')
+            tags.add(tag.strip())
+    return ["All"] + sorted(tags)
+
 # === Core generation logic ===
 def generate_name(n, temp, topk, dataset, prefix, tag_filter):
     print(f"→ Generating {n} names from {dataset} at temperature {temp}, top-k={topk}, prefix={prefix}, tag={tag_filter}")
@@ -86,10 +100,7 @@ def generate_name(n, temp, topk, dataset, prefix, tag_filter):
 
     # Filter
     if tag_filter and tag_filter != "All":
-        filtered = []
-        for name, tag in zip(names_raw, tags):
-            if tag == tag_filter:
-                filtered.append(name)
+        filtered = [name for name, tag in zip(names_raw, tags) if tag == tag_filter]
         results = [r for r in results if r in filtered]
         results = results[:n]
     else:
@@ -127,24 +138,32 @@ with gr.Blocks(theme=selected_theme) as demo:
 
     with gr.Row():
         prefix_input = gr.Textbox(label="Start With (Prefix)", placeholder="e.g., El, Dra...")
-        tag_dropdown = gr.Dropdown(label="Tag Filter", choices=["All", "elven", "orcish", "scientific"], value="All")
+        tag_dropdown = gr.Dropdown(label="Tag Filter", choices=["All"], value="All")
 
     output = gr.Textbox(label="Generated Names", lines=10)
     generate_btn = gr.Button("🔁 Generate")
     copy_btn = gr.Button("📋 Copy")
 
+    # Trigger name generation
     generate_btn.click(
         fn=generate_name,
         inputs=[n_slider, temp_slider, topk_slider, dataset_dropdown, prefix_input, tag_dropdown],
         outputs=output
     )
-
     prefix_input.change(
         fn=generate_name,
         inputs=[n_slider, temp_slider, topk_slider, dataset_dropdown, prefix_input, tag_dropdown],
         outputs=output
     )
 
+    # Update tags dynamically on dataset change
+    dataset_dropdown.change(
+        fn=get_tags_for_dataset,
+        inputs=dataset_dropdown,
+        outputs=tag_dropdown
+    )
+
+    # Copy to clipboard button
     copy_btn.click(
         fn=lambda txt: txt,
         inputs=output,
