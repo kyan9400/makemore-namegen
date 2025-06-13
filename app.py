@@ -27,8 +27,7 @@ def generate_name(n, temp, topk, dataset, prefix, tag_filter):
         return f"[Error] Dataset '{dataset}' not found."
 
     # Split into names and tags
-    names_raw = []
-    tags = []
+    names_raw, tags = [], []
     for line in lines:
         if '|' in line:
             name, tag = line.split('|')
@@ -38,7 +37,7 @@ def generate_name(n, temp, topk, dataset, prefix, tag_filter):
             names_raw.append(line.strip())
             tags.append("default")
 
-    # Build vocab from raw names only
+    # Build vocab
     stoi, itos = build_vocab(names_raw)
     vocab_size = len(stoi)
 
@@ -55,11 +54,10 @@ def generate_name(n, temp, topk, dataset, prefix, tag_filter):
     model.eval()
     results = []
 
-    for _ in range(n * 2):  # Over-generate to account for filtering
+    for _ in range(n * 2):
         context = [0] * context_size
         name = ''
 
-        # Inject prefix
         for ch in prefix:
             ix = stoi.get(ch.lower(), 0)
             name += ch
@@ -83,14 +81,18 @@ def generate_name(n, temp, topk, dataset, prefix, tag_filter):
             context = context[1:] + [ix]
 
         results.append(name)
-
-        # Stop if enough valid results
-        if len(results) >= n:
+        if len(results) >= n * 2:
             break
 
-    # Filter if tag is selected
+    # Filter
     if tag_filter and tag_filter != "All":
-        results = [r for r, t in zip(results, tags) if t == tag_filter]
+        filtered = []
+        for name, tag in zip(names_raw, tags):
+            if tag == tag_filter:
+                filtered.append(name)
+        results = [r for r in results if r in filtered]
+        results = results[:n]
+    else:
         results = results[:n]
 
     return "\n".join(results)
@@ -99,7 +101,6 @@ def generate_name(n, temp, topk, dataset, prefix, tag_filter):
 def delayed_restart(new_theme):
     time.sleep(1.5)
     os.environ["APP_THEME"] = new_theme
-    print(f"🌈 Restarting with theme: {new_theme}")
     os.execv(sys.executable, [sys.executable] + sys.argv)
 
 def handle_theme_change(choice):
@@ -107,17 +108,17 @@ def handle_theme_change(choice):
     threading.Thread(target=delayed_restart, args=(new_theme,)).start()
     return "🔄 Switching theme... Please wait..."
 
+# === Launch UI ===
 selected_theme = os.environ.get("APP_THEME", "default")
 current_theme_name = "Light" if selected_theme == "default" else "Dark"
 
-# === Gradio UI ===
 with gr.Blocks(theme=selected_theme) as demo:
     gr.Markdown("## 🧠 Name Generator")
 
     with gr.Row():
         n_slider = gr.Slider(1, 50, value=10, step=1, label="Number of Names")
         temp_slider = gr.Slider(0.5, 2.0, value=1.0, step=0.1, label="Temperature")
-        topk_slider = gr.Slider(0, 50, value=0, step=1, label="Top-k Sampling (0 = no limit)")
+        topk_slider = gr.Slider(0, 50, value=0, step=1, label="Top-k Sampling")
         dataset_dropdown = gr.Dropdown(
             choices=["names.txt", "pokemon.txt", "fantasy.txt"],
             value="names.txt",
@@ -125,12 +126,12 @@ with gr.Blocks(theme=selected_theme) as demo:
         )
 
     with gr.Row():
-        prefix_input = gr.Textbox(label="Start With (Prefix)", placeholder="Enter 1–2 starting letters...")
+        prefix_input = gr.Textbox(label="Start With (Prefix)", placeholder="e.g., El, Dra...")
         tag_dropdown = gr.Dropdown(label="Tag Filter", choices=["All", "elven", "orcish", "scientific"], value="All")
 
     output = gr.Textbox(label="Generated Names", lines=10)
     generate_btn = gr.Button("🔁 Generate")
-    copy_btn = gr.Button("📋 Copy to Clipboard")
+    copy_btn = gr.Button("📋 Copy")
 
     generate_btn.click(
         fn=generate_name,
@@ -152,11 +153,9 @@ with gr.Blocks(theme=selected_theme) as demo:
     )
 
     gr.Markdown("---")
-    gr.Markdown("🎨 **Toggle Theme**")
     theme_radio = gr.Radio(choices=["Light", "Dark"], value=current_theme_name, label="Choose Theme")
     loading_notice = gr.Textbox(value="", visible=True, interactive=False, show_label=False)
     theme_radio.change(fn=handle_theme_change, inputs=theme_radio, outputs=loading_notice)
 
-# === Launch ===
 if __name__ == "__main__":
     demo.launch()
