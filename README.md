@@ -1,5 +1,7 @@
 # Makemore Name Generator
 
+[![Quality](https://github.com/kyan9400/makemore-namegen/actions/workflows/quality.yml/badge.svg)](https://github.com/kyan9400/makemore-namegen/actions/workflows/quality.yml)
+
 A small character-level name generator built with PyTorch. It learns from a text file, saves a trained model, and samples new names through either the command line or a Gradio interface.
 
 The model uses a three-character context and a compact multilayer perceptron. The repository includes datasets for regular names, Pokémon-style names, and fantasy names.
@@ -25,10 +27,17 @@ On macOS or Linux:
 source .venv/bin/activate
 ```
 
-Install the dependencies:
+Install the pinned dependency ranges:
 
 ```bash
-python -m pip install torch gradio matplotlib
+python -m pip install -r requirements.txt
+```
+
+Run the lightweight verification suite before training:
+
+```bash
+python -m compileall -q .
+python -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
 ## Train
