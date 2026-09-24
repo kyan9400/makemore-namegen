@@ -71,6 +71,8 @@ Sampling can be adjusted with temperature and top-k:
 python generate.py --file fantasy.txt --n 20 --temp 0.9 --topk 8
 ```
 
+[`examples/sample_output.txt`](./examples/sample_output.txt) shows names sampled from a model trained on `pokemon.txt`.
+
 ## Run the interface
 
 ```bash
@@ -87,5 +89,8 @@ vocab.py      character vocabulary
 train.py      training and loss plotting
 generate.py   command-line generation
 app.py        Gradio interface
+plot_loss.py  display a saved loss curve
 *.txt         training datasets
+tests/        unit tests (run with unittest)
+examples/     sample generated output
 ```
